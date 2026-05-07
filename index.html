@@ -893,26 +893,42 @@
 </footer>
 
 <script>
-// ── STATE ──
-function loadProjects() {
-  try {
-    var saved = localStorage.getItem('agenza_projects');
-    if (saved) return JSON.parse(saved);
-  } catch(e) {}
-  return { mech: [], media: [], ai: [] };
-}
-function saveProjects() {
-  try {
-    localStorage.setItem('agenza_projects', JSON.stringify(state.projects));
-  } catch(e) {}
-}
+// ── PERSISTENT SHARED STORAGE ──
+// Projects are saved to shared cloud storage so they sync across
+// ALL devices and browsers automatically.
+const STORAGE_KEY = 'agenza-projects-v1';
 
 const state = {
   phone: '+216 27.437.930',
   email: 'wassimsaanoun7@gmail.com',
   location: 'Tunisia',
-  projects: loadProjects()
+  projects: { mech: [], media: [], ai: [] }
 };
+
+// Save to shared storage (visible on all devices)
+async function saveProjects() {
+  try {
+    await window.storage.set(STORAGE_KEY, JSON.stringify(state.projects), true);
+  } catch(e) {
+    console.error('Storage save error:', e);
+  }
+}
+
+// Load from shared storage on startup
+async function loadProjectsFromStorage() {
+  try {
+    const result = await window.storage.get(STORAGE_KEY, true);
+    if (result && result.value) {
+      const saved = JSON.parse(result.value);
+      if (saved && saved.mech) state.projects = saved;
+    }
+  } catch(e) {
+    // No data yet — start empty
+  }
+  renderProjects('mech');
+  renderProjects('media');
+  renderProjects('ai');
+}
 
 // ── ADMIN OPEN/CLOSE ──
 function openAdmin() {
@@ -1110,10 +1126,8 @@ function toggleShowMore(sector) {
   }
 }
 
-// Init all renders
-renderProjects('mech');
-renderProjects('media');
-renderProjects('ai');
+// Init all renders — load from shared storage (syncs across all devices)
+loadProjectsFromStorage();
 
 // ── SAVE FEEDBACK ──
 function showSaved(btn) {
