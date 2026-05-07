@@ -632,11 +632,24 @@
 
 <script>
 // ── STATE ──
+function loadProjects() {
+  try {
+    var saved = localStorage.getItem('agenza_projects');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return { mech: [], media: [], ai: [] };
+}
+function saveProjects() {
+  try {
+    localStorage.setItem('agenza_projects', JSON.stringify(state.projects));
+  } catch(e) {}
+}
+
 const state = {
   phone: '+216 27.437.930',
   email: 'wassimsaanoun7@gmail.com',
   location: 'Tunisia',
-  projects: { mech: [], media: [], ai: [] }
+  projects: loadProjects()
 };
 
 // ── ADMIN OPEN/CLOSE ──
@@ -713,6 +726,7 @@ function addProject(sector) {
   const doAdd = (imgSrc) => {
     const project = { id: Date.now(), title, desc, img: imgSrc };
     state.projects[sector].push(project);
+    saveProjects();
     renderProjects(sector);
     showToast('Project "' + title + '" added to the ' + sector.toUpperCase() + ' section!');
     // clear form
@@ -735,6 +749,7 @@ function addProject(sector) {
 // ── REMOVE PROJECT ──
 function removeProject(sector, id) {
   state.projects[sector] = state.projects[sector].filter(p => p.id !== id);
+  saveProjects();
   renderProjects(sector);
 }
 
