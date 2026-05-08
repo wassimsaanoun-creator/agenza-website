@@ -132,6 +132,14 @@
   .project-card:hover{transform:translateY(-4px);border-color:rgba(255,255,255,0.2);}
   .project-thumb{width:100%;aspect-ratio:16/10;object-fit:cover;display:block;background:#1a1d22;}
   .project-thumb-placeholder{width:100%;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;font-size:2rem;background:#1a1d22;}
+  .project-video-wrap{position:relative;width:100%;aspect-ratio:16/10;background:#000;overflow:hidden;}
+  .project-video-wrap video{width:100%;height:100%;object-fit:cover;display:block;}
+  .project-video-wrap .play-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.4);transition:background 0.2s;cursor:pointer;}
+  .project-video-wrap:hover .play-overlay{background:rgba(0,0,0,0.15);}
+  .play-icon{width:52px;height:52px;background:rgba(45,219,161,0.9);border-radius:50%;display:flex;align-items:center;justify-content:center;transition:transform 0.2s,background 0.2s;box-shadow:0 0 20px rgba(45,219,161,0.4);}
+  .project-video-wrap:hover .play-icon{transform:scale(1.12);background:var(--green-light);}
+  .play-icon::after{content:'';display:block;width:0;height:0;border-style:solid;border-width:9px 0 9px 17px;border-color:transparent transparent transparent #000;margin-left:4px;}
+  .video-reel-badge{position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.7);color:var(--green-light);font-family:var(--font-cond);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;padding:0.25rem 0.6rem;border:1px solid rgba(45,219,161,0.4);pointer-events:none;}
   .project-info{padding:1rem 1.2rem;}
   .project-title{font-family:var(--font-cond);font-size:0.9rem;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:0.3rem;color:var(--white);}
   .project-desc{font-size:0.8rem;color:var(--muted);line-height:1.55;}
@@ -604,10 +612,30 @@
               <div class="admin-field"><label>Description</label><input id="media-new-desc" type="text" placeholder="Brief description"></div>
             </div>
             <div class="admin-field">
+              <label>Media Type</label>
+              <div style="display:flex;gap:1rem;margin-top:0.4rem;">
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;color:var(--muted);cursor:pointer;">
+                  <input type="radio" name="media-type" value="image" id="media-type-image" checked onchange="toggleMediaType('image')" style="accent-color:var(--green-light);">
+                  📷 Photo
+                </label>
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.88rem;color:var(--muted);cursor:pointer;">
+                  <input type="radio" name="media-type" value="video" id="media-type-video" onchange="toggleMediaType('video')" style="accent-color:var(--green-light);">
+                  🎬 Video / Reel
+                </label>
+              </div>
+            </div>
+            <div class="admin-field" id="media-img-field">
               <label>Photo</label>
               <div class="file-input-wrap">
                 <input type="file" accept="image/*" id="media-new-img" onchange="previewFile(this,'media-preview')">
                 <img id="media-preview" class="preview-img">
+              </div>
+            </div>
+            <div class="admin-field" id="media-video-field" style="display:none;">
+              <label>Video / Reel <span style="font-size:0.75rem;color:var(--muted);font-weight:300;">(MP4, MOV, WebM — max ~50MB recommended)</span></label>
+              <div class="file-input-wrap">
+                <input type="file" accept="video/*" id="media-new-video" onchange="previewVideo(this,'media-video-preview')">
+                <video id="media-video-preview" class="preview-img" controls style="display:none;height:auto;max-height:180px;background:#000;"></video>
               </div>
             </div>
             <button class="add-btn green-add" onclick="addProject('media')">+ Add Work</button>
@@ -1015,13 +1043,75 @@ function previewFile(input, previewId) {
   }
 }
 
+// ── VIDEO PREVIEW ──
+function previewVideo(input, previewId) {
+  const preview = document.getElementById(previewId);
+  if (input.files && input.files[0]) {
+    const url = URL.createObjectURL(input.files[0]);
+    preview.src = url;
+    preview.style.display = 'block';
+  }
+}
+
+// ── TOGGLE MEDIA TYPE (photo / video) ──
+function toggleMediaType(type) {
+  const imgField   = document.getElementById('media-img-field');
+  const videoField = document.getElementById('media-video-field');
+  if (type === 'video') {
+    imgField.style.display   = 'none';
+    videoField.style.display = 'block';
+  } else {
+    imgField.style.display   = 'block';
+    videoField.style.display = 'none';
+  }
+}
+
 // ── ADD PROJECT ──
 function addProject(sector) {
   const title = document.getElementById(sector + '-new-title').value.trim();
   const desc = document.getElementById(sector + '-new-desc').value.trim();
-  const imgInput = document.getElementById(sector + '-new-img');
   if (!title) { alert('Please enter a project title'); return; }
 
+  // For media sector, check if video or image is selected
+  if (sector === 'media') {
+    const isVideo = document.getElementById('media-type-video') && document.getElementById('media-type-video').checked;
+    if (isVideo) {
+      const videoInput = document.getElementById('media-new-video');
+      if (videoInput.files && videoInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const project = { id: Date.now(), title, desc, img: null, video: e.target.result };
+          state.projects[sector].push(project);
+          saveProjects();
+          renderProjects(sector);
+          showToast('Reel "' + title + '" added to the MEDIA section!');
+          document.getElementById(sector + '-new-title').value = '';
+          document.getElementById(sector + '-new-desc').value = '';
+          videoInput.value = '';
+          const prev = document.getElementById('media-video-preview');
+          prev.src = ''; prev.style.display = 'none';
+          // Reset to image mode
+          document.getElementById('media-type-image').checked = true;
+          toggleMediaType('image');
+        };
+        reader.readAsDataURL(videoInput.files[0]);
+      } else {
+        // Video selected type but no file — still save as video placeholder
+        const project = { id: Date.now(), title, desc, img: null, video: null };
+        state.projects[sector].push(project);
+        saveProjects();
+        renderProjects(sector);
+        showToast('Work "' + title + '" added to the MEDIA section!');
+        document.getElementById(sector + '-new-title').value = '';
+        document.getElementById(sector + '-new-desc').value = '';
+        document.getElementById('media-type-image').checked = true;
+        toggleMediaType('image');
+      }
+      return;
+    }
+  }
+
+  const imgInput = document.getElementById(sector + '-new-img');
   const doAdd = (imgSrc) => {
     const project = { id: Date.now(), title, desc, img: imgSrc };
     state.projects[sector].push(project);
@@ -1071,9 +1161,17 @@ function renderProjects(sector) {
     var listHTML = '';
     for (var i = 0; i < projects.length; i++) {
       var p = projects[i];
-      var thumbHTML = p.img
-        ? '<img src="' + p.img + '" alt="' + p.title + '" style="width:100%;height:100%;object-fit:cover;">'
-        : '<span style="font-size:1.4rem;">' + emoji + '</span>';
+      var thumbHTML;
+      if (p.video) {
+        thumbHTML = '<div style="width:100%;height:100%;background:#0a0d0b;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;">' +
+          '<span style="font-size:1.2rem;">🎬</span>' +
+          '<span style="font-size:0.6rem;color:var(--green-light);font-family:var(--font-cond);letter-spacing:0.1em;text-transform:uppercase;">Reel</span>' +
+          '</div>';
+      } else if (p.img) {
+        thumbHTML = '<img src="' + p.img + '" alt="' + p.title + '" style="width:100%;height:100%;object-fit:cover;">';
+      } else {
+        thumbHTML = '<span style="font-size:1.4rem;">' + emoji + '</span>';
+      }
       listHTML += '<div class="project-row">' +
         '<div class="project-row-thumb">' + thumbHTML + '</div>' +
         '<div class="project-row-info">' +
@@ -1106,9 +1204,19 @@ function renderProjects(sector) {
     var proj = projects[j];
     var isHidden = (j >= PREVIEW && !isExpanded);
     var glassSuffix = { mech: ' mech-c', media: ' media-c', ai: ' ai-c' };
-    var imgHTML = proj.img
-      ? '<img class="project-thumb" src="' + proj.img + '" alt="' + proj.title + '">'
-      : '<div class="project-thumb-placeholder"><span style="font-size:2.2rem;">' + emoji + '</span></div>';
+    var imgHTML;
+    if (proj.video) {
+      // Video / Reel card
+      imgHTML = '<div class="project-video-wrap" onclick="playProjectVideo(this)">' +
+        '<video src="' + proj.video + '" preload="metadata" playsinline muted loop></video>' +
+        '<div class="play-overlay"><div class="play-icon"></div></div>' +
+        '<span class="video-reel-badge">🎬 Reel</span>' +
+        '</div>';
+    } else if (proj.img) {
+      imgHTML = '<img class="project-thumb" src="' + proj.img + '" alt="' + proj.title + '">';
+    } else {
+      imgHTML = '<div class="project-thumb-placeholder"><span style="font-size:2.2rem;">' + emoji + '</span></div>';
+    }
     displayHTML += '<div class="project-card glass-card tilt-card glow-card' + glassSuffix[sector] + (isHidden ? ' hidden-card' : '') + '">' +
       imgHTML +
       '<div class="project-info">' +
@@ -1160,10 +1268,35 @@ window.updateContact    = updateContact;
 window.updateHero       = updateHero;
 window.updateSectorDesc = updateSectorDesc;
 window.previewFile      = previewFile;
+window.previewVideo     = previewVideo;
+window.toggleMediaType  = toggleMediaType;
 window.addProject       = addProject;
 window.removeProject    = removeProject;
 window.toggleShowMore   = toggleShowMore;
 window.showSaved        = showSaved;
+
+// ── PLAY PROJECT VIDEO (toggle play/pause on click) ──
+window.playProjectVideo = function(wrap) {
+  var video = wrap.querySelector('video');
+  var overlay = wrap.querySelector('.play-overlay');
+  if (!video) return;
+  if (video.paused) {
+    video.muted = false;
+    video.play();
+    overlay.style.opacity = '0';
+    video.addEventListener('pause', function onPause() {
+      overlay.style.opacity = '1';
+      video.removeEventListener('pause', onPause);
+    }, { once: true });
+    video.addEventListener('ended', function onEnd() {
+      overlay.style.opacity = '1';
+      video.removeEventListener('ended', onEnd);
+    }, { once: true });
+  } else {
+    video.pause();
+    overlay.style.opacity = '1';
+  }
+};
 
 // ── SAVE FEEDBACK ──
 function showSaved(btn) {
