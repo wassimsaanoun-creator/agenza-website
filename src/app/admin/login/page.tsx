@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -72,9 +72,6 @@ export default function AdminLoginPage() {
             {loading ? "SIGNING IN..." : "SIGN IN →"}
           </button>
 
-          <div className="mt-6 pt-6 border-t border-white/[0.08] text-center">
-            <p className="font-mono text-[10px] tracking-wide text-titanium/60">DEFAULT / admin@agenza.com · Admin123!</p>
-          </div>
         </form>
       </div>
     </div>
