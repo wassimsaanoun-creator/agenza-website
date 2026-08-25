@@ -1,16 +1,6 @@
-import { promises as fs } from "fs";
-import { join } from "path";
-import { randomUUID } from "crypto";
+﻿import { randomUUID } from "crypto";
 import sharp from "sharp";
-
-const UPLOAD_DIR = join(process.cwd(), "public", "uploads");
-const PROJECTS_DIR = join(UPLOAD_DIR, "projects");
-const LEADS_DIR = join(UPLOAD_DIR, "leads");
-
-// Ensure directories exist
-async function ensureDir(dir: string) {
-  await fs.mkdir(dir, { recursive: true });
-}
+import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 
 export const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -74,70 +64,77 @@ export async function saveFile(
   originalName: string,
   subDir: string = "projects"
 ): Promise<UploadedFile> {
-  await ensureDir(UPLOAD_DIR);
-  
-  const baseDir = subDir === "leads" ? LEADS_DIR : PROJECTS_DIR;
-  await ensureDir(baseDir);
-
   const ext = getExtension(mimeType);
   const uuid = randomUUID();
   const filename = `${uuid}.${ext}`;
-  const filepath = join(baseDir, filename);
+  const storagePath = `${subDir}/${filename}`;
 
-  // Process images with sharp for optimization
+  let uploadBuffer = buffer;
+
+  // Optimize images with sharp before upload
   if (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") {
     try {
       const metadata = await sharp(buffer).metadata();
-      
-      // Resize large images
       if (metadata.width && metadata.width > 1920) {
-        await sharp(buffer)
+        uploadBuffer = await sharp(buffer)
           .resize(1920, null, { withoutEnlargement: true })
           .jpeg({ quality: 85 })
-          .toFile(filepath);
+          .toBuffer();
       } else {
-        await sharp(buffer).toFile(filepath);
+        uploadBuffer = await sharp(buffer).toBuffer();
       }
-    } catch (error) {
-      // If sharp fails, save original
-      await fs.writeFile(filepath, buffer);
+    } catch {
+      // If sharp fails (e.g. unsupported format), upload original buffer
+      uploadBuffer = buffer;
     }
-  } else {
-    await fs.writeFile(filepath, buffer);
   }
 
-  // Get file size
-  const stats = await fs.stat(filepath);
+  const { error } = await supabaseAdmin.storage
+    .from(STORAGE_BUCKET)
+    .upload(storagePath, uploadBuffer, {
+      contentType: mimeType,
+      upsert: false,
+    });
+
+  if (error) {
+    throw new Error(`Supabase upload failed: ${error.message}`);
+  }
+
+  const { data: publicUrlData } = supabaseAdmin.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(storagePath);
 
   return {
     filename,
     originalName,
-    url: `/uploads/${subDir}/${filename}`,
+    url: publicUrlData.publicUrl,
     mimeType,
-    size: stats.size,
+    size: uploadBuffer.length,
     fileType: getFileType(mimeType),
   };
 }
 
 export async function deleteFile(url: string): Promise<void> {
   try {
-    // Convert URL to file path
-    const relativePath = url.replace("/uploads/", "");
-    const filepath = join(UPLOAD_DIR, relativePath);
-    await fs.unlink(filepath);
+    // Extract storage path from the public URL
+    // Public URLs look like: .../storage/v1/object/public/project-media/projects/xxxx.png
+    const marker = `/object/public/${STORAGE_BUCKET}/`;
+    const idx = url.indexOf(marker);
+    if (idx === -1) {
+      console.error("Could not parse storage path from URL:", url);
+      return;
+    }
+    const storagePath = url.substring(idx + marker.length);
+
+    const { error } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .remove([storagePath]);
+
+    if (error) {
+      console.error("Error deleting file from Supabase:", error.message);
+    }
   } catch (error) {
     console.error("Error deleting file:", error);
-  }
-}
-
-export async function getFileBuffer(url: string): Promise<Buffer | null> {
-  try {
-    const relativePath = url.replace("/uploads/", "");
-    const filepath = join(UPLOAD_DIR, relativePath);
-    return await fs.readFile(filepath);
-  } catch (error) {
-    console.error("Error reading file:", error);
-    return null;
   }
 }
 
