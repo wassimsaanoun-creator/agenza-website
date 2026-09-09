@@ -1,5 +1,4 @@
 ﻿import { randomUUID } from "crypto";
-import sharp from "sharp";
 import { supabaseAdmin, STORAGE_BUCKET } from "@/lib/supabase";
 
 export const ALLOWED_IMAGE_TYPES = [
@@ -71,9 +70,11 @@ export async function saveFile(
 
   let uploadBuffer = buffer;
 
-  // Optimize images with sharp before upload
+  // Optimize images with sharp before upload (best-effort — if sharp fails to load
+  // or process, fall back to uploading the original buffer unmodified)
   if (mimeType.startsWith("image/") && mimeType !== "image/svg+xml") {
     try {
+      const sharp = (await import("sharp")).default;
       const metadata = await sharp(buffer).metadata();
       if (metadata.width && metadata.width > 1920) {
         uploadBuffer = await sharp(buffer)
@@ -84,7 +85,7 @@ export async function saveFile(
         uploadBuffer = await sharp(buffer).toBuffer();
       }
     } catch {
-      // If sharp fails (e.g. unsupported format), upload original buffer
+      // If sharp fails to load or process (e.g. platform binary issue), upload original buffer
       uploadBuffer = buffer;
     }
   }
